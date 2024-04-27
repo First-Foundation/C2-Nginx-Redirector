@@ -1,5 +1,3 @@
-# (NOT COMPLETED YET)
-
 # Table of Contents
 
   1. [Title](#Title)
