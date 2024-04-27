@@ -1,5 +1,5 @@
 #TODO
-[] Still need to work out DNS redirection (If able)
+- [] Still need to work out DNS redirection (If able)
 
 # Table of Contents
 
