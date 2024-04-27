@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Check if Certificates Exist
+if [ "$(ls -A ./cert)" ]; then
+
+    printf "[!] Certificates Found!\n"
+
+    # Check if User wants to Delete Certificates
+    printf "[?] Are you sure you want to delete existing certificates? (Y)es/(N)o: "
+    read answer
+
+    # Convert Variable "answer" to Uppercase
+    answer=$(echo "$answer" | tr '[:lower:]' '[:upper:]')
+
+    case $answer in
+
+        "Y"|"YES")
+            # Deleting Previous Certificates
+            printf "[+] Deleting Certificates...\n"
+            rm -f ./cert/{fullchain.pem,privkey.pem}
+            printf "[i] Done\n"
+            ;;
+
+        "N"|"NO")
+            printf "[+] Not Deleting Certificates.\n[i] Done\n"
+            ;;
+
+        *)
+            # Exit/Fail When Non-Valid Input is Recieved
+            printf "[!] Invalid Input. Please enter either (Y)es/(N)o\n"
+            exit 1
+            ;;
+    esac
+else
+
+    printf "[!] No Certificates Found!\n[i] Done\n"
+fi
+
+# Exit Script
+exit 0

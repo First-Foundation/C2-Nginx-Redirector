@@ -1,0 +1,20 @@
+#!/bin/bash
+
+RDRROOTDIR=/var/www/redirectors/nginx
+REDIRARRAY=$(ls -A $RDRROOTDIR)
+
+printf "[+] Stopping Redirectors...\n"
+
+# Iterate through Redirectors
+for redirector in ${REDIRARRAY[@]}; do
+    DKRNAME="nginx-"$(echo $redirector|tr '.' '-')
+    # Stop Container (Should Remove Automatically)
+    printf "[+] Redirector $redirector\n"
+    printf "\tStopping/Removing Container: $DKRNAME\n"
+    docker stop $DKRNAME > /dev/null
+    # Delete Created Network for Redirector
+    printf "\tRemoving Network: $DKRNAME\n"
+    docker network rm $DKRNAME-network > /dev/null
+done
+
+printf "\nDone\n"

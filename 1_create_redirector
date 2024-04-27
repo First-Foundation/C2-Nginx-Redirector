@@ -1,0 +1,148 @@
+#!/bin/bash
+
+shopt -s nocasematch
+
+# Check Arguments
+if [ ! $# -eq 2 ]; then
+
+    printf "[!] Command Requires two (2) Arguments\n"
+    printf "\t[*] Usage: 1_create_redirector <Redirector Domain> <https|http|stealth|dns>\n"
+    printf "\t[*] Example: 1_create_redirector template.example.com https\n"
+    printf "\nDone\n"
+    exit 1
+
+elif [[ -z "$1" || "$1" = "" ]]; then
+
+    printf "[!] Argument is Empty\n"
+    printf "\t[*] Usage: 1_create_redirector <Redirector Domain> <https|http|stealth|dns>\n"
+    printf "\t[*] Example: 1_create_redirector template.example.com https\n"
+    printf "\nDone\n"
+    exit 1
+
+elif [[ -z "$2" || "$2" = "" || "$1" =~ (https|http|dns|stealth) ]]; then
+
+    printf "[!] Second Argument is Empty or Incorrect Order\n"
+    printf "\t[*] Usage: 1_create_redirector <Redirector Domain> <https|http|stealth|dns>\n"
+    printf "\t[*] Example: 1_create_redirector template.example.com https\n"
+    printf "\nDone\n"
+    exit 1
+
+else
+
+    shopt -u nocasematch
+    REDIRECTOR=$1
+    REDIRTYPE="$(echo $2|tr '[:upper:]' '[:lower:]')"
+    WWWROOTDIR=/var/www/redirectors/nginx
+
+    ## Create Required Directories
+    mkdir -p $WWWROOTDIR/$REDIRECTOR/{cert,html,prof,nginx,wg}
+    printf "%-30s \t %30s\n" "[i] Created Directory:" "$WWWROOTDIR/$REDIRECTOR/html"
+    printf "%-30s \t %30s\n" "[i] Created Directory:" "$WWWROOTDIR/$REDIRECTOR/prof"
+    printf "%-30s \t %30s\n" "[i] Created Directory:" "$WWWROOTDIR/$REDIRECTOR/nginx"
+    printf "%-30s \t %30s\n" "[i] Created Directory:" "$WWWROOTDIR/$REDIRECTOR/cert"
+    printf "%-30s \t %30s\n" "[i] Created Directory:" "$WWWROOTDIR/$REDIRECTOR/wg" 
+
+    ## Change Permissions of Directories
+    chmod -R +w $WWWROOTDIR/$REDIRECTOR
+
+    ## Copy Important Files to Directories
+    # GENSSL
+    cp ./1_src/1_genssl $WWWROOTDIR/$REDIRECTOR/1_genssl
+    sed -e '/^CN/s/^CN.*/CN='"\"$REDIRECTOR\""'/' -i $WWWROOTDIR/$REDIRECTOR/1_genssl
+    chmod +x $WWWROOTDIR/$REDIRECTOR/1_genssl
+    printf "%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/1_genssl"
+
+    # REMSSL
+    cp ./1_src/2_remssl $WWWROOTDIR/$REDIRECTOR/2_remssl
+    chmod +x $WWWROOTDIR/$REDIRECTOR/2_remssl
+    printf "%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/2_remssl"
+
+    # STARTSRV
+    cp ./1_src/3_startsrv $WWWROOTDIR/$REDIRECTOR
+    sed -e '/^WEBSITE/s/^WEBSITE.*/WEBSITE='"\"$REDIRECTOR\""'/' -i $WWWROOTDIR/$REDIRECTOR/3_startsrv
+    chmod +x $WWWROOTDIR/$REDIRECTOR/3_startsrv
+    printf "%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/3_startsrv"
+
+    # HTML
+    cp ./1_src/index.html $WWWROOTDIR/$REDIRECTOR/html/index.html
+    printf "%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/html/index.html"
+    cp ./1_src/50x.html $WWWROOTDIR/$REDIRECTOR/html/50x.html
+    printf "%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/html/50x.html"
+    cp ./1_src/styles.css $WWWROOTDIR/$REDIRECTOR/html/styles.css
+    printf "%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/html/styles.css"
+
+    # CONFIGURATIONS
+    
+    case "$REDIRTYPE" in
+        "http")
+            printf "[?] Enter the C2 Teamserver IP or DNS CNAME and PORT (Example: 192.168.0.1:443): "
+            read TEAMSERVER
+            cp ./1_src/http.conf $WWWROOTDIR/$REDIRECTOR/nginx/http.conf
+            sed -e '/WEBSITE/s/WEBSITE/'"$REDIRECTOR"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/http.conf
+            sed -e '/TEAMSERVER/s/TEAMSERVER/'"$TEAMSERVER"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/http.conf
+            sed -e '/OPTION/s/OPTION/http/' -i $WWWROOTDIR/$REDIRECTOR/3_startsrv
+            printf "%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/nginx/http.conf"
+            ;;
+
+        "https")
+            printf "[?] Enter the C2 Teamserver IP or DNS CNAME and PORT (Example: 192.168.0.1:443): "
+            read TEAMSERVER
+            cp ./1_src/https.conf $WWWROOTDIR/$REDIRECTOR/nginx/https.conf
+            sed -e '/WEBSITE/s/WEBSITE/'"$REDIRECTOR"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/https.conf
+            sed -e '/TEAMSERVER/s/TEAMSERVER/'"$TEAMSERVER"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/https.conf
+            sed -e '/OPTION/s/OPTION/https/' -i $WWWROOTDIR/$REDIRECTOR/3_startsrv
+            cd $WWWROOTDIR/$REDIRECTOR/ && ./1_genssl && cd -
+            printf "\n%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/nginx/https.conf"
+            ;;
+
+        "dns")
+            printf "[?] Enter the C2 Teamserver DNS CNAME (Example: www.teamserver.com): "
+            read TEAMSERVER
+            printf "[?] Enter the Interface to be Used (Example: wg1, Default: eth0): "
+            read INTERFACE
+            if [[ -z "$INTERFACE" ]]; then
+                INTERFACE="eth0"
+            fi
+            cp ./1_src/dns.conf $WWWROOTDIR/$REDIRECTOR/nginx/dns.conf
+            sed -e '/TEAMSERVER/s/TEAMSERVER/'"$TEAMSERVER"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/dns.conf
+            sed -e '/INTERFACE/s/INTERFACE/'"$INTERFACE"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/dns.conf
+            sed -e '/OPTION/s/OPTION/dns/' -i $WWWROOTDIR/$REDIRECTOR/3_startsrv
+            cd $WWWROOTDIR/$REDIRECTOR/ && ./1_genssl && cd -
+            printf "\n%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/nginx/dns.conf"
+            ;;
+
+        "stealth")
+            printf "[?] Enter the C2 Teamserver IP or DNS CNAME and PORT (Example: 192.168.0.1:443): "
+            read TEAMSERVER
+            printf "[?] Enter the Proxy Domain IP or CNAME and PORT (Example: proxied_domain.com:443): "
+            read PROXYDOMAIN
+            cp ./1_src/stealth-https.conf $WWWROOTDIR/$REDIRECTOR/nginx/stealth-https.conf
+            sed -e '/WEBSITE/s/WEBSITE/'"$REDIRECTOR"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/stealth-https.conf
+            sed -e '/TEAMSERVER/s/TEAMSERVER/'"$TEAMSERVER"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/stealth-https.conf
+            sed -e '/PROXYDOMAIN/s/PROXYDOMAIN/'"$PROXYDOMAIN"'/' -i $WWWROOTDIR/$REDIRECTOR/nginx/stealth-https.conf
+            sed -e '/OPTION/s/OPTION/stealth/' -i $WWWROOTDIR/$REDIRECTOR/3_startsrv
+            cd $WWWROOTDIR/$REDIRECTOR/ && ./1_genssl && cd -
+            printf "\n%-30s \t %30s\n" "[i] Created File:" "$WWWROOTDIR/$REDIRECTOR/nginx/stealth-https.conf"
+            ;;
+
+        *)
+            printf "[!] Second Argument is Not a Selection\n"
+            printf "\t[*] Options include: https, http, dns, stealth\n"
+            printf "\t[*] Usage: 1_create_redirector <Redirector Domain> <https|http|stealth|dns>\n"
+            printf "\t[*] Example: 1_create_redirector template.example.com https\n"
+            printf "\nDone\n"
+            exit 1
+            ;;
+    esac
+
+    printf "%-30s \t %30s\n" "[i] Redirector Created:" "$WWWROOTDIR/$REDIRECTOR/"
+    printf "    [*] You may need to edit the Nginx Conf File created in $WWWROOTDIR/$REDIRECTOR/nginx\n"
+    printf "        - If you make edits to the file you'll need to run 'docker restart <container_name>\n"
+    printf "        - If container fails to start, Check the Configuration File.\n"
+    printf "    [*] You can also edit the index.html and styles.css files to personalize your redirector\n"
+    printf "    [*] Recommend using Open AI to generate the Web Files for you if you want a quick site.\n"
+
+fi
+
+printf "\nDone\n"
+exit 0

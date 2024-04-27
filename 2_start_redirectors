@@ -1,0 +1,46 @@
+#!/bin/bash
+
+IP4ADDR=$(ip route get 8.8.8.8|awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
+RDRROOTDIR=/var/www/redirectors/nginx
+REDIRARRAY=$(ls -A $RDRROOTDIR)
+SSLPORTS=4430
+REGPORTS=8080
+
+printf "[+] Starting Redirectors...\n"
+
+# Go through '/var/www/redirectors' and Start the Redirectors
+for redirector in ${REDIRARRAY[@]}; do
+
+    # Checks to make sure the Redirector has the Script to Start
+    if [ "$(ls $RDRROOTDIR/$redirector/3_startsrv 2>/dev/null)" ]; then
+
+        # Check if the Redirector will Launch with or without Certificates
+        if [ "$(ls -A $RDRROOTDIR/$redirector/cert)" ]; then
+            # If Redirector has Certs, Switch HTTPS Variable
+            sed -e '/^SSLPORT/s/^SSLPORT.*/SSLPORT='"$SSLPORTS"'/' -i $RDRROOTDIR/$redirector/3_startsrv
+            
+            # Start HTTPS Redirector
+            $RDRROOTDIR/$redirector/3_startsrv
+            printf "[+] Started $redirector! Binded to $IP4ADDR:$SSLPORTS\n"
+
+            # Increment HTTPS Variable for Next Redirector
+            (( SSLPORTS++ ))
+
+        else
+            # If Redirector doesn't have Certs, Switch HTTP Variable, and Increase for Next
+            sed -e '/^REGPORT/s/^REGPORT.*/REGPORT='"$REGPORTS"'/' -i $RDRROOTDIR/$redirector/3_startsrv
+
+            # Start HTTP Redirector
+            $RDRROOTDIR/$redirector/3_startsrv
+            printf "[+] Started $redirector! Binded to $IP4ADDR:$REGPORTS\n"
+            
+            # Increment HTTP Variable for Next Redirector
+            (( REGPORTS++ ))
+
+        fi
+    fi
+done
+
+# List all Containers
+printf "\n\n\n[i] Listing Containers\n"
+docker ps

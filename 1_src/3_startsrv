@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Create Case Statement to Handles Server Start
+WEBSITE="template.example.com"
+WEBCERT="/var/www/redirectors/nginx/$WEBSITE/cert"
+WEBHTML="/var/www/redirectors/nginx/$WEBSITE/html"
+NGINXCF="/var/www/redirectors/nginx/$WEBSITE/nginx"
+WGCERTS="/var/www/redirectors/nginx/$WEBSITE/wg"
+DKRNAME="nginx-"$(echo $WEBSITE|tr '.' '-')
+IP4ADDR=$(ip route get 8.8.8.8|awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
+SSLPORT=443
+REGPORT=80
+
+# Create Custome Network for Redirector
+docker network create \
+    --attachable \
+    --driver bridge \
+    $DKRNAME-network
+
+if [ "$(ls -A $WEBCERT)" ]; then
+    docker run -itd --rm \
+        --cap-add=NET_ADMIN \
+        --cap-add=NET_RAW \
+        --cap-add=SYS_MODULE \
+        --network $DKRNAME-network \
+        --sysctl=net.ipv4.conf.all.rp_filter=2 \
+        -e REDIRNAME=$WEBSITE \
+        -p $IP4ADDR:$SSLPORT:443 \
+        -v $WEBCERT:/cert \
+        -v $WEBHTML:/usr/share/nginx/html/ \
+        -v $NGINXCF:/etc/nginx/conf.d/ \
+        -v $WGCERTS:/etc/wireguard \
+        -v /var/run/docker/docker.sock:/var/run/docker/docker.sock \
+        --name $DKRNAME \
+        --entrypoint /usr/local/bin/launcher \
+        redirector:nginx \
+        OPTION
+else
+    docker run -itd --rm \
+        --cap-add=NET_ADMIN \
+        --cap-add=NET_RAW \
+        --cap-add=SYS_MODULE \
+        --network $DKRNAME-network \
+        --sysctl=net.ipv4.conf.all.rp_filter=2 \
+        -e REDIRNAME=$WEBSITE \
+        -p $IP4ADDR:$REGPORT:80 \
+        -v $WEBCERT:/cert \
+        -v $WEBHTML:/usr/share/nginx/html/ \
+        -v $NGINXCF:/etc/nginx/conf.d/ \
+        -v $WGCERTS:/etc/wireguard \
+        -v /var/run/docker/docker.sock:/var/run/docker/docker.sock \
+        --name $DKRNAME \
+        --entrypoint /usr/local/bin/launcher \
+        redirector:nginx \
+        OPTION
+fi
+
+# List Newly Created Container and Network
+docker ps -f name=$DKRNAME
+docker network ls -f name=$DKRNAME-network

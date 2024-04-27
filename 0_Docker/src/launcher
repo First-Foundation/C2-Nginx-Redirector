@@ -1,0 +1,53 @@
+#!/bin/bash
+
+STARTUP=$(echo "$1" | tr '[:lower:]' '[:upper:]' )
+
+case $STARTUP in
+    "DNS")
+        DOCKERPORT=80
+        printf "[+] Running DNS! Selecting DNS Configuration...\n"
+        sed -e '/\*.conf/s/\*.conf/dns.conf/' -i /etc/nginx/nginx.conf
+        ;;
+
+    "HTTP")
+        DOCKERPORT=80
+        printf "[+] SSL/TLS Certificates NOT Found! Selecting HTTP Configuration...\n"
+        sed -e '/\*.conf/s/\*.conf/http.conf/' -i /etc/nginx/nginx.conf
+        ;;
+
+    "HTTPS")
+        DOCKERPORT=443
+        printf "[+] SSL/TLS Certificates Found! Selecting HTTPS Configuration...\n"
+        sed -e '/\*.conf/s/\*.conf/https.conf/' -i /etc/nginx/nginx.conf
+        ;;
+
+    "STEALTH")
+        DOCKERPORT=443
+        printf "[+] SSL/TLS Certificates Found! Selecting HTTPS Stealth Configuration...\n"
+        sed -e '/\*.conf/s/\*.conf/stealth-https.conf/' -i /etc/nginx/nginx.conf
+        ;;
+    
+    *)
+        # Exit/Fail When Non-Valid Input is Recieved
+        printf "[!] Invalid Input. Please enter either DNS , HTTP , HTTPS , or STEALTH\n"
+        exit 1
+        ;;
+esac
+
+# Start Wireguard (If Applicable)
+if [ "$(ls -A /etc/wireguard 2> /dev/null)" ]; then
+    WGCONFIG=$(ls -A1 /etc/wireguard/|head -n1|awk -F'.' '{print $1}')
+    IPV4ADDR=$(egrep "^Address" /etc/wireguard/$WGCONFIG.conf | awk -F' = ' '{print $2}')
+    printf "[+] Wireguard Config Found!:\t $WGCONFIG\n"
+    printf "[+] Starting Wireguard Connection...\n"
+    wg-quick up $WGCONFIG
+    printf "[+] Configuring IPTables...\n"
+    iptables -A FORWARD -m state --state NEW -p tcp -d $IPV4ADDR --dport $DOCKERPORT -j ACCEPT
+    printf "[+] Setting MTU 1180...\n"
+    ip link set dev $WGCONFIG mtu 1180
+else
+    printf "[-] No Wireguard Configuration Found. Skipping...\n"
+fi
+
+# Execute NGINX # Probably Need to Edit This File
+exec nginx -g 'daemon off;'
