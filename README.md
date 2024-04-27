@@ -1,3 +1,6 @@
+#TODO
+[] Still need to work out DNS redirection (If able)
+
 # Table of Contents
 
   1. [Title](#Title)
